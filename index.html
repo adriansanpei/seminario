@@ -808,7 +808,7 @@ footer{border-top:1px solid var(--rule);padding:44px 0 calc(44px + env(safe-area
   }
   const stopAuto = () => { paused = true; tabs.forEach(t => t.querySelector('.prog').style.display = 'none'); };
   tabs.forEach((t, i) => {
-    t.addEventListener('click', () => { stopAuto(); show(i); });
+    t.addEventListener('click', () => { stopAuto(); show(i); if (typeof gtag === 'function') gtag('event', 'temario_tab', { semana: i + 1 }); });
     t.addEventListener('keydown', e => {
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { stopAuto(); show((cur + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length, true); }
     });
@@ -838,7 +838,7 @@ footer{border-top:1px solid var(--rule);padding:44px 0 calc(44px + env(safe-area
   $$('.qa button').forEach(b => b.addEventListener('click', () => {
     const qa = b.parentElement, open = qa.classList.contains('open');
     $$('.qa.open').forEach(q => { q.classList.remove('open'); q.firstElementChild.setAttribute('aria-expanded', 'false'); });
-    if (!open) { qa.classList.add('open'); b.setAttribute('aria-expanded', 'true'); }
+    if (!open) { qa.classList.add('open'); b.setAttribute('aria-expanded', 'true'); if (typeof gtag === 'function') gtag('event', 'faq_open', { pregunta: b.textContent.trim().slice(0, 90) }); }
   }));
 
   // Barra fija en móvil: después del hero y antes del precio
@@ -847,7 +847,31 @@ footer{border-top:1px solid var(--rule);padding:44px 0 calc(44px + env(safe-area
   new IntersectionObserver(e => { heroV = e[0].isIntersecting; upd(); }).observe($('#hero'));
   new IntersectionObserver(e => { priceV = e[0].isIntersecting; upd(); }).observe($('#precio'));
 
-  // Analytics
+  // Analytics: secciones vistas, profundidad de scroll y tiempo en página
+  (function(){
+    if (typeof gtag !== 'function') return;
+    const names = { metodo: 'resultados', temario: 'temario', instructores: 'instructores', precio: 'precio', faq: 'preguntas' };
+    const seen = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      gtag('event', 'section_view', { seccion: names[e.target.id] || e.target.id });
+      seen.unobserve(e.target);
+    }), { threshold: 0.35 });
+    Object.keys(names).forEach(id => { const el = document.getElementById(id); if (el) seen.observe(el); });
+
+    const marks = [25, 50, 75, 100], hit = {};
+    addEventListener('scroll', () => {
+      const h = document.documentElement.scrollHeight - innerHeight;
+      if (h <= 0) return;
+      const pct = scrollY / h * 100;
+      marks.forEach(m => { if (pct >= m - 1 && !hit[m]) { hit[m] = 1; gtag('event', 'scroll_depth', { porcentaje: m }); } });
+    }, { passive: true });
+
+    [30, 60, 120, 300].forEach(sec => setTimeout(() => {
+      if (document.visibilityState === 'visible') gtag('event', 'tiempo_en_pagina', { segundos: sec });
+    }, sec * 1000));
+  })();
+
+  // Analytics: clics
   $$('[data-cta]').forEach(a => a.addEventListener('click', () => {
     if (typeof gtag !== 'function') return;
     if ('checkout' in a.dataset) gtag('event', 'begin_checkout', { value: 300, currency: 'USD', cta_location: a.dataset.cta });
